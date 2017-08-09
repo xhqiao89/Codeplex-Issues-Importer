@@ -16,15 +16,15 @@ if forceUTF8:
 
 
 # Used github3.py - https://github.com/sigmavirus24/github3.py
-# install using easy_install github3.py 
+# install using easy_install github3.py
 #            or pip install github3.py
 
 #User specific values
 
-CODEPLEX_PROJECT = "gpslogger.codeplex.com"
-GITHUB_PROJECT = "Codeplex-Issues-Importer" 
-GITHUB_USERNAME = "mendhak"
-GITHUB_PASSWORD = ""
+CODEPLEX_PROJECT = "hydrodesktop.codeplex.com" # PROJECT NAME ON CODEPLEX
+GITHUB_PROJECT = "HydroDesktop" # PROJECT NAME ON GITHUB
+GITHUB_USERNAME = "GITHUB_USERNAME"
+GITHUB_PASSWORD = "GITHUB_PASSWORD"
 GITHUB_ISSUELABEL = "CodePlex"
 
 import urllib2
@@ -58,23 +58,23 @@ class CodePlexWorkItem():
 
 	def __init__(self):
 			self.comments = []
-	
+
 	def AppendHeading(self, h):
 		self.heading = self.heading + h
-	
+
 	def SetDescription(self, d):
 		self.description = d
 
 	def AppendDescription(self, d):
 		self.description = self.description + d
-	
+
 	def SetSubmittedBy(self, s):
 		self.submittedby =  s
 		self.description = "<b>" + s + "[CodePlex]</b> <br />" + self.description
 
 	def AddComment(self, c):
 		self.comments.insert(0,c)
-		
+
 	def SetIsClosed(self, c):
 		self.isClosed = c
 
@@ -94,7 +94,7 @@ class IssuesListParser(HTMLParser.HTMLParser):
 	def handle_starttag(self, tag, attrs):
 		if tag == "a" and len(attrs) > 0:
 			href = getTupleValue(attrs, "href")
-			
+
 			if re.match("(.)*/workitem/[0-9]+", href):
 				self.itemLinks.append(href)
 
@@ -111,9 +111,9 @@ class WorkItemParser(HTMLParser.HTMLParser):
 	commentAreaFound = False
 	commentFound = False
 	comment = ""
-	
+
 	submittedByFound = False
-	
+
 	itemStatusFound = False
 
 	currentWorkItem = None
@@ -127,16 +127,16 @@ class WorkItemParser(HTMLParser.HTMLParser):
 
 	def handle_starttag(self, tag, attrs):
 
-		if tag == "h1" and len(attrs) > 0: 
+		if tag == "h1" and len(attrs) > 0:
 			h1Id = getTupleValue(attrs, "id")
 			if h1Id == "workItemTitle":
 				self.titleFound = True
-				
-		if tag == "p" and len(attrs) > 0: 
+
+		if tag == "p" and len(attrs) > 0:
 			pId = getTupleValue(attrs, "id")
 			if pId != None and "VotedLabel" in pId:
 				self.itemStatusFound = True
-				
+
 		if tag == "div" and len(attrs) > 0:
 			divId = getTupleValue(attrs, "id")
 			divClass = getTupleValue(attrs, "class")
@@ -175,13 +175,13 @@ class WorkItemParser(HTMLParser.HTMLParser):
 		if self.itemStatusFound:
 			if data == "Closed":
 				self.currentWorkItem.SetIsClosed(True)
-				
+
 			print "CLOSED: %s" % (True)
-			
+
 
 	def handle_endtag(self, tag):
 		if self.itemStatusFound and tag == "p":
-			self.itemStatusFound = False		
+			self.itemStatusFound = False
 		if self.titleFound and tag == "h1":
 			self.titleFound = False
 		if self.descriptionFound and tag == "div":
@@ -203,7 +203,7 @@ class WorkItemParser(HTMLParser.HTMLParser):
 			#self.comment = self.comment + data
 		if self.titleFound:
 			self.currentWorkItem.AppendHeading(name)
-			
+
 
 	def handle_charref(self, name):
 		#Don't unescape entities 60 and 62
@@ -216,7 +216,7 @@ class WorkItemParser(HTMLParser.HTMLParser):
 				self.comment = self.comment + self.unescape("&#" + name + ";")
 		if self.titleFound:
 			self.currentWorkItem.AppendHeading(self.unescape("&#" + name + ";"))
-			
+
 	def handle_startendtag(self, tag, attrs):
 		"""For self closing tags such as <img /> or <br />"""
 		if tag == "br":
@@ -224,7 +224,7 @@ class WorkItemParser(HTMLParser.HTMLParser):
 				self.currentWorkItem.AppendDescription("<br />")
 			if self.commentFound:
 				self.comment = self.comment + " <br />"
-		
+
 
 
 issuesUrlFormat = "http://" + CODEPLEX_PROJECT + "/workitem/list/basic?field=CreationDate&direction=Ascending&issuesToDisplay=All&keywords=&emailSubscribedItemsOnly=false&size=100&page={pn}"
@@ -236,7 +236,7 @@ totalLinks = 0
 #Extract links from the main issues page
 while continuePaging:
 	pageNumber += 1
-	issuePageUrl = issuesUrlFormat.format(pn=str(pageNumber)) 
+	issuePageUrl = issuesUrlFormat.format(pn=str(pageNumber))
 	print "Parsing page ", pageNumber, "(", issuePageUrl, ")"
 
 	ilp = IssuesListParser(issuePageUrl)
@@ -254,19 +254,27 @@ parsedWorkItems = []
 
 
 #Loop through, process each work item link
+errorItem = []
 for itemUrl in ilp.itemLinks:
-	print "\n\nParsing %s" % (itemUrl)
-	wiParser = WorkItemParser(itemUrl)
-	print wiParser.currentWorkItem.heading
-	parsedWorkItems.append(wiParser.currentWorkItem)
-	
+    try:
+        #print "\n\nParsing %s" % (itemUrl)
+        wiParser = WorkItemParser(itemUrl)
+        #print wiParser.currentWorkItem.heading
+        # skip closed issue
+        if not wiParser.currentWorkItem.isClosed:
+			parsedWorkItems.append(wiParser.currentWorkItem)
+
+    except Exception as ex:
+        print ex
+        errorItem.append(itemUrl)
+
 print len(parsedWorkItems), " work items parsed from CodePlex"
 
 #initialize github
 gh = login(GITHUB_USERNAME, password=GITHUB_PASSWORD)
 
 for wi in parsedWorkItems:
-	print "gh.create_issue(%s,%s,%s,%s,labels=[%s])" % (GITHUB_USERNAME,GITHUB_PROJECT,wi.heading,wi.description,GITHUB_ISSUELABEL)
+	#print "gh.create_issue(%s,%s,%s,%s,labels=[%s])" % (GITHUB_USERNAME,GITHUB_PROJECT,wi.heading,wi.description,GITHUB_ISSUELABEL)
 	newIssue = gh.create_issue(GITHUB_USERNAME,GITHUB_PROJECT,wi.heading,wi.description,labels=[GITHUB_ISSUELABEL])
 	if not newIssue:
 		print "Unable to create issue"
@@ -275,14 +283,18 @@ for wi in parsedWorkItems:
 	# Github has added an 'abuse prevention' feature which will interrupt this process
 	# unless waits are used. Github 'best practice' recommends at least one second
 	# between activities; I'm being paranoid and using two second delays.
-	time.sleep(2)
+	time.sleep(20)
 	for c in wi.comments:
 		newIssue.create_comment(c)
-		time.sleep(2)
+		time.sleep(20)
 
 	if wi.isClosed:
 		newIssue.close()
 	print "Created Github issue", newIssue.number, "for", "[" + wi.heading + "]"
-	time.sleep(3)
+	time.sleep(20)
 
 print "End of script"
+print "error List\n"
+for e in errorItem:
+	print e
+
